@@ -114,6 +114,7 @@ set(mlxdata-src
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/buffer/Shuffle.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/buffer/Transform.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/stream/Stream.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/mlx/data/stream/ArrowStream.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/stream/Batch.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/stream/Buffered.cpp
     ${CMAKE_CURRENT_LIST_DIR}/mlx/data/stream/DynamicBatch.cpp

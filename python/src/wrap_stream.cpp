@@ -9,6 +9,7 @@
 
 #include "mlx/data/Buffer.h"
 #include "mlx/data/Stream.h"
+#include "mlx/data/stream/ArrowStream.h"
 #include "mlx/data/stream/Stream.h"
 
 #include "wrap.h"
@@ -612,6 +613,68 @@ void init_mlx_data_stream(py::module& m) {
           content (str): The string containing the content of a csv file.
           sep (str): The field separator in the csv file. (default: ',')
           quote (str): The quotation character in the csv file. (default: '"')
+      )pbcopy");
+
+  m.def(
+      "stream_arrow",
+      [](py::object obj) {
+        // The PyCapsule protocol, not a raw address: any object exposing
+        // `__arrow_c_stream__` works, which covers pyarrow (Table, RecordBatch,
+        // RecordBatchReader, ParquetFile.iter_batches), polars, duckdb, Lance
+        // and pyiceberg. mlx-data links nothing for this -- `core/arrow/abi.h`
+        // is a header whose only include is <stdint.h>.
+        if (!py::hasattr(obj, "__arrow_c_stream__")) {
+          throw std::invalid_argument(
+              "stream_arrow: expected an object exposing __arrow_c_stream__ (a pyarrow "
+              "Table, RecordBatch, RecordBatchReader, or anything else implementing the "
+              "Arrow PyCapsule interface)");
+        }
+        py::object capsule = obj.attr("__arrow_c_stream__")();
+        auto* stream = static_cast<ArrowArrayStream*>(
+            PyCapsule_GetPointer(capsule.ptr(), "arrow_array_stream"));
+        if (stream == nullptr) {
+          throw std::runtime_error(
+              "stream_arrow: __arrow_c_stream__ did not return an 'arrow_array_stream' "
+              "capsule");
+        }
+        // `ArrowStream`'s constructor moves out of the struct and marks it
+        // released, which is what the protocol requires of a consumer --
+        // otherwise the capsule's own destructor would release it a second
+        // time.
+        return Stream(std::make_shared<stream::ArrowStream>(stream));
+      },
+      py::arg("data"),
+      R"pbcopy(
+        Stream batches of Arrow data, without copying them.
+
+        Each sample is one Arrow **record batch**, not one row: a batch's column is already
+        one contiguous typed buffer, so it is adopted as an array rather than split into
+        values. That makes the leading dimension of every array the batch size chosen by
+        whatever produced the data.
+
+        Consequently :meth:`Stream.batch` on top of this re-batches and undoes the saving.
+        Choose the size where the data is produced instead, e.g.
+        ``pq.ParquetFile(path).iter_batches(batch_size=32)``.
+
+        .. code-block:: python
+
+          import mlx.data as dx
+          import pyarrow.parquet as pq
+
+          dset = dx.stream_arrow(pq.ParquetFile("train.parquet").iter_batches(1024))
+          batch = next(dset)          # {'col': array of 1024, ...}
+
+        Only fixed-width numeric columns are supported: int8, uint8, int32, int64, float
+        and double. A boolean column is a bitmap and is refused rather than reinterpreted;
+        strings and nested types need more than one buffer and do not fit a single array; a
+        column with nulls is refused, because a sample has nowhere to record which values
+        are absent.
+
+        An Arrow stream is consumed once, so :meth:`Stream.reset` raises. Use
+        :func:`stream_python_iterable` with a factory if more than one pass is needed.
+
+        Args:
+          data (object): anything exposing ``__arrow_c_stream__``.
       )pbcopy");
 
   m.def(
