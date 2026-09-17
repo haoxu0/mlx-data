@@ -16,12 +16,6 @@ namespace stream {
 
 // A stream over Arrow data handed in through the C Data Interface.
 //
-// The interface is a header, not a library: `core/arrow/abi.h` includes only
-// <stdint.h>, so this adds no build dependency at all -- no Arrow C++, no
-// linking. Anything that can export an `ArrowArrayStream` can feed it, which in
-// practice means pyarrow (`Table.to_reader()`, `ParquetFile.iter_batches()`),
-// pyiceberg, Lance, DuckDB and polars.
-//
 // **One Sample per RecordBatch, not per row.** Arrow already stores a column as
 // one contiguous typed buffer, so a batch's column *is* an Array -- adopted,
 // not copied, via `Array(type, shape, shared_ptr<void>)`. Emitting rows instead
